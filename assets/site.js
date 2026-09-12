@@ -81,7 +81,10 @@ function syncTeasers() {
     if (!nearViewport.has(video) || (reduceMotion.matches && !video.controls)) { video.pause(); return; }
     video.autoplay = !reduceMotion.matches;
     if (!video.getAttribute('src') && video.dataset.previewSrc) video.src = video.dataset.previewSrc;
-    if (!reduceMotion.matches) video.play().catch(() => {});
+    if (!reduceMotion.matches && (!video.controls || !video.dataset.started)) {
+      video.dataset.started = 'true';
+      video.play().catch(() => {});
+    }
   });
 }
 if ('IntersectionObserver' in window) {
