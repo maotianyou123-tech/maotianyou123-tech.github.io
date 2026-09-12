@@ -74,6 +74,71 @@ dialog.addEventListener('close', () => {
 // Match the reference GIF-style previews with silent looping local videos.
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const teasers = [...document.querySelectorAll('.teaser-video')];
-function syncTeasers() { teasers.forEach(video => { video.muted = true; if (reduceMotion.matches) video.pause(); else video.play().catch(() => {}); }); }
+const nearViewport = new Set();
+function syncTeasers() {
+  teasers.forEach(video => {
+    video.muted = true;
+    if (!nearViewport.has(video) || (reduceMotion.matches && !video.controls)) { video.pause(); return; }
+    video.autoplay = !reduceMotion.matches;
+    if (!video.getAttribute('src') && video.dataset.previewSrc) video.src = video.dataset.previewSrc;
+    if (!reduceMotion.matches) video.play().catch(() => {});
+  });
+}
+if ('IntersectionObserver' in window) {
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => entry.isIntersecting ? nearViewport.add(entry.target) : nearViewport.delete(entry.target));
+    syncTeasers();
+  }, {rootMargin: '240px 0px'});
+  teasers.forEach(video => observer.observe(video));
+} else { teasers.forEach(video => nearViewport.add(video)); }
 reduceMotion.addEventListener('change', syncTeasers);
 syncTeasers();
+
+const citeDialog = document.querySelector('#cite-dialog');
+const citationData = document.querySelector('#citation-data');
+if (citeDialog && citationData) {
+  const citations = JSON.parse(citationData.textContent);
+  const format = citeDialog.querySelector('#cite-format');
+  const text = citeDialog.querySelector('#cite-text');
+  const status = citeDialog.querySelector('#cite-status');
+  let activePaper, citeTrigger;
+  function selectedCitation() { return citations[activePaper].formats[format.value]; }
+  function updateCitation() { text.value = selectedCitation().text; status.textContent = ''; }
+  document.querySelectorAll('[data-cite-id]').forEach(button => button.addEventListener('click', () => {
+    activePaper = button.dataset.citeId;
+    if (!citations[activePaper]) return;
+    citeTrigger = button;
+    citeDialog.querySelector('#cite-paper-title').textContent = citations[activePaper].title;
+    updateCitation();
+    citeDialog.showModal();
+    document.body.style.overflow = 'hidden';
+    format.focus();
+  }));
+  format.addEventListener('change', updateCitation);
+  citeDialog.querySelector('.close-cite').addEventListener('click', () => citeDialog.close());
+  citeDialog.addEventListener('click', event => {
+    const r = citeDialog.getBoundingClientRect();
+    if (event.target === citeDialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) citeDialog.close();
+  });
+  citeDialog.addEventListener('close', () => { document.body.style.overflow = ''; citeTrigger?.focus(); });
+  citeDialog.querySelector('#copy-citation').addEventListener('click', async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(text.value);
+      status.textContent = 'Copied.';
+    } catch {
+      text.focus(); text.select();
+      status.textContent = document.execCommand('copy') ? 'Copied.' : 'Select and copy the citation above.';
+    }
+  });
+  citeDialog.querySelector('#download-citation').addEventListener('click', () => {
+    const citation = selectedCitation();
+    const file = new Blob([citation.text], {type: 'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url; link.download = `${activePaper}-${format.value}.${citation.extension}`;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    status.textContent = 'Citation downloaded.';
+  });
+}
