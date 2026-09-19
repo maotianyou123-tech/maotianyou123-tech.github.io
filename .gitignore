@@ -1,0 +1,13 @@
+# Publish only the static website. Local engineering files stay on this computer.
+/*
+!/.gitignore
+!/.nojekyll
+!/index.html
+!/assets/
+!/projects/
+!/documents/
+# Never publish generated caches or editor/OS metadata inside public directories.
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
+**/*~
